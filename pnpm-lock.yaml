@@ -130,6 +130,25 @@ importers:
         specifier: ^1.2.0
         version: 1.6.1(@types/node@20.19.33)
 
+  packages/storage-fs:
+    dependencies:
+      '@oct/core':
+        specifier: workspace:*
+        version: link:../core
+      neverthrow:
+        specifier: ^6.1.0
+        version: 6.2.2
+    devDependencies:
+      tsup:
+        specifier: ^8.0.1
+        version: 8.5.1(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.2.0
+        version: 1.6.1(@types/node@20.19.33)
+
 packages:
 
   /@esbuild/aix-ppc64@0.21.5:

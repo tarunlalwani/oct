@@ -1,4 +1,4 @@
-import type { Task } from '../domain/task.js';
+import type { Task } from '../schemas/task.js';
 import type { DomainError } from '../schemas/error.js';
 import type { Result } from 'neverthrow';
 

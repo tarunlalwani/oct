@@ -2,17 +2,21 @@
 export * from './schemas/index.js';
 export * from './schemas/use-cases.js';
 
-// Domain
-export * from './domain/task.js';
-
 // Ports
 export * from './ports/task-repository.js';
+export * from './ports/storage-adapter.js';
 
-// Use Cases
-export { createTaskUseCase } from './use-cases/create-task.js';
-export { getTaskUseCase } from './use-cases/get-task.js';
-export { runTaskUseCase } from './use-cases/run-task.js';
-export { listTasksUseCase } from './use-cases/list-tasks.js';
+// Use Cases - Project
+export * from './use-cases/project/index.js';
+
+// Use Cases - Employee
+export * from './use-cases/employee/index.js';
+
+// Use Cases - Template
+export * from './use-cases/template/index.js';
+
+// Use Cases - Task
+export * from './use-cases/task/index.js';
 
 // Re-export neverthrow for convenience
 export { ok, err, Result, Ok, Err } from 'neverthrow';
