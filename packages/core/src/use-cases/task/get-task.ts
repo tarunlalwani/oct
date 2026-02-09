@@ -1,30 +1,37 @@
-import { z } from 'zod';
 import { ok, err, type Result } from 'neverthrow';
-import type { ExecutionContext } from '../../schemas/context.js';
-import { taskSchema, type Task } from '../../schemas/task.js';
-import type { DomainError } from '../../schemas/error.js';
-import { createError } from '../../schemas/error.js';
 import type { StorageAdapter } from '../../ports/storage-adapter.js';
+import type {
+  ExecutionContext,
+  Task,
+  DomainError,
+} from '../../schemas/index.js';
+import { createError, PERMISSIONS } from '../../schemas/index.js';
 
-export const getTaskInputSchema = z.object({
-  taskId: z.string(),
-});
+export interface GetTaskInput {
+  taskId: string;
+}
 
-export type GetTaskInput = z.infer<typeof getTaskInputSchema>;
+export interface GetTaskOutput {
+  task: Task;
+}
 
-export const getTaskOutputSchema = z.object({
-  task: taskSchema,
-});
-
-export type GetTaskOutput = z.infer<typeof getTaskOutputSchema>;
-
+/**
+ * Get task use case
+ * Requires: task:read permission
+ */
 export async function getTaskUseCase(
   ctx: ExecutionContext,
   input: GetTaskInput,
   adapter: StorageAdapter
 ): Promise<Result<GetTaskOutput, DomainError>> {
-  if (ctx.actorId === null) {
+  // Check authentication
+  if (!ctx.actorId) {
     return err(createError('UNAUTHORIZED', 'Authentication required', false));
+  }
+
+  // Check authorization
+  if (!ctx.permissions.includes(PERMISSIONS.TASK_READ)) {
+    return err(createError('FORBIDDEN', `Missing permission: ${PERMISSIONS.TASK_READ}`, false));
   }
 
   const taskResult = await adapter.getTask(input.taskId);

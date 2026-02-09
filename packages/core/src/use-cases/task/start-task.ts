@@ -1,30 +1,35 @@
-import { z } from 'zod';
 import { ok, err, type Result } from 'neverthrow';
-import type { ExecutionContext } from '../../schemas/context.js';
-import { taskSchema, type Task } from '../../schemas/task.js';
-import type { DomainError } from '../../schemas/error.js';
-import { createError } from '../../schemas/error.js';
 import type { StorageAdapter } from '../../ports/storage-adapter.js';
+import type {
+  ExecutionContext,
+  Task,
+  StartTaskInput,
+  DomainError,
+} from '../../schemas/index.js';
+import { createError, PERMISSIONS } from '../../schemas/index.js';
 
-export const startTaskInputSchema = z.object({
-  taskId: z.string(),
-});
+export interface StartTaskOutput {
+  task: Task;
+}
 
-export type StartTaskInput = z.infer<typeof startTaskInputSchema>;
-
-export const startTaskOutputSchema = z.object({
-  task: taskSchema,
-});
-
-export type StartTaskOutput = z.infer<typeof startTaskOutputSchema>;
-
+/**
+ * Start task use case
+ * Requires: task:start permission
+ * Task must be in 'ready' status (dependencies satisfied)
+ */
 export async function startTaskUseCase(
   ctx: ExecutionContext,
   input: StartTaskInput,
   adapter: StorageAdapter
 ): Promise<Result<StartTaskOutput, DomainError>> {
-  if (ctx.actorId === null) {
+  // Check authentication
+  if (!ctx.actorId) {
     return err(createError('UNAUTHORIZED', 'Authentication required', false));
+  }
+
+  // Check authorization
+  if (!ctx.permissions.includes(PERMISSIONS.TASK_START)) {
+    return err(createError('FORBIDDEN', `Missing permission: ${PERMISSIONS.TASK_START}`, false));
   }
 
   const taskResult = await adapter.getTask(input.taskId);
@@ -38,7 +43,7 @@ export async function startTaskUseCase(
 
   const task = taskResult.value;
 
-  // Check ownership
+  // Check ownership or task:manage permission
   if (task.ownerId !== ctx.actorId && !ctx.permissions.includes('task:manage')) {
     return err(createError('FORBIDDEN', 'Only task owner can start the task', false));
   }
@@ -52,13 +57,14 @@ export async function startTaskUseCase(
     }
   }
 
-  if (task.status === 'in_progress') {
-    return err(createError('CONFLICT', 'Task is already in progress', false));
+  // Can only start from 'ready' status
+  if (task.status !== 'ready') {
+    return err(createError('CONFLICT', `Cannot start task with status: ${task.status}`, false));
   }
 
   const updatedTask: Task = {
     ...task,
-    status: 'in_progress',
+    status: 'active',
     updatedAt: new Date().toISOString(),
   };
 

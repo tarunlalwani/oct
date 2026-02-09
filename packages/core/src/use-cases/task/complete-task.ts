@@ -1,30 +1,36 @@
-import { z } from 'zod';
 import { ok, err, type Result } from 'neverthrow';
-import type { ExecutionContext } from '../../schemas/context.js';
-import { taskSchema, type Task } from '../../schemas/task.js';
-import type { DomainError } from '../../schemas/error.js';
-import { createError } from '../../schemas/error.js';
 import type { StorageAdapter } from '../../ports/storage-adapter.js';
+import type {
+  ExecutionContext,
+  Task,
+  CompleteTaskInput,
+  DomainError,
+} from '../../schemas/index.js';
+import { createError, PERMISSIONS } from '../../schemas/index.js';
 
-export const completeTaskInputSchema = z.object({
-  taskId: z.string(),
-});
+export interface CompleteTaskOutput {
+  task: Task;
+}
 
-export type CompleteTaskInput = z.infer<typeof completeTaskInputSchema>;
-
-export const completeTaskOutputSchema = z.object({
-  task: taskSchema,
-});
-
-export type CompleteTaskOutput = z.infer<typeof completeTaskOutputSchema>;
-
+/**
+ * Complete task use case
+ * Requires: task:complete permission
+ * Transitions task to 'review' status
+ * Unblocks dependent tasks
+ */
 export async function completeTaskUseCase(
   ctx: ExecutionContext,
   input: CompleteTaskInput,
   adapter: StorageAdapter
 ): Promise<Result<CompleteTaskOutput, DomainError>> {
-  if (ctx.actorId === null) {
+  // Check authentication
+  if (!ctx.actorId) {
     return err(createError('UNAUTHORIZED', 'Authentication required', false));
+  }
+
+  // Check authorization
+  if (!ctx.permissions.includes(PERMISSIONS.TASK_COMPLETE)) {
+    return err(createError('FORBIDDEN', `Missing permission: ${PERMISSIONS.TASK_COMPLETE}`, false));
   }
 
   const taskResult = await adapter.getTask(input.taskId);
@@ -38,22 +44,19 @@ export async function completeTaskUseCase(
 
   const task = taskResult.value;
 
-  if (task.status !== 'in_progress' && task.status !== 'todo') {
+  // Check ownership or task:manage permission
+  if (task.ownerId !== ctx.actorId && !ctx.permissions.includes('task:manage')) {
+    return err(createError('FORBIDDEN', 'Only task owner can complete the task', false));
+  }
+
+  // Can only complete from 'active' status
+  if (task.status !== 'active') {
     return err(createError('CONFLICT', `Cannot complete task with status: ${task.status}`, false));
   }
 
-  const ownerResult = await adapter.getEmployee(task.ownerId);
-  const canAutoApprove = ownerResult.isOk() && ownerResult.value?.capabilities.canAutoApprove;
-
   const updatedTask: Task = {
     ...task,
-    status: canAutoApprove ? 'done' : 'in_review',
-    approval: canAutoApprove ? {
-      state: 'auto_approved',
-      approverId: task.ownerId,
-      approvedAt: new Date().toISOString(),
-      policy: 'auto-approve',
-    } : null,
+    status: 'review',
     updatedAt: new Date().toISOString(),
   };
 
@@ -68,30 +71,34 @@ export async function completeTaskUseCase(
   return ok({ task: updatedTask });
 }
 
+/**
+ * Unblock tasks that depend on the completed task
+ */
 async function unblockDependentTasks(completedTaskId: string, adapter: StorageAdapter): Promise<void> {
-  const dependentsResult = await adapter.getTasksByDependency(completedTaskId);
-  if (dependentsResult.isErr()) return;
+  const allTasksResult = await adapter.listTasks();
+  if (allTasksResult.isErr()) return;
 
-  for (const dependent of dependentsResult.value) {
-    if (dependent.status === 'blocked') {
-      // Check ALL dependencies properly using Promise.all
-      const depStatuses = await Promise.all(
-        dependent.dependencies.map(async (depId) => {
-          const depResult = await adapter.getTask(depId);
-          return depResult.isOk() && depResult.value?.status === 'done';
-        })
-      );
+  const dependents = allTasksResult.value.filter(
+    (t) => t.dependencies.includes(completedTaskId) && t.status === 'blocked'
+  );
 
-      const allDone = depStatuses.every(status => status);
-      if (allDone) {
-        const updatedDependent: Task = {
-          ...dependent,
-          status: 'todo',
-          blockedBy: [],
-          updatedAt: new Date().toISOString(),
-        };
-        await adapter.saveTask(updatedDependent);
-      }
+  for (const dependent of dependents) {
+    // Check ALL dependencies are done
+    const depStatuses = await Promise.all(
+      dependent.dependencies.map(async (depId) => {
+        const depResult = await adapter.getTask(depId);
+        return depResult.isOk() && depResult.value?.status === 'done';
+      })
+    );
+
+    const allDone = depStatuses.every((status) => status);
+    if (allDone) {
+      const updatedDependent: Task = {
+        ...dependent,
+        status: 'ready',
+        updatedAt: new Date().toISOString(),
+      };
+      await adapter.saveTask(updatedDependent);
     }
   }
 }

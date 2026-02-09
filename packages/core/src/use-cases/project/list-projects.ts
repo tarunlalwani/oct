@@ -1,40 +1,41 @@
-import { z } from 'zod';
 import { ok, err, type Result } from 'neverthrow';
-import type { ExecutionContext } from '../../schemas/context.js';
-import type { Project } from '../../schemas/project.js';
-import type { DomainError } from '../../schemas/error.js';
 import type { StorageAdapter } from '../../ports/storage-adapter.js';
+import type {
+  ExecutionContext,
+  Project,
+  ListProjectsFilter,
+  DomainError,
+} from '../../schemas/index.js';
+import { createError, PERMISSIONS } from '../../schemas/index.js';
 
-export const listProjectsInputSchema = z.object({
-  filter: z.object({
-    status: z.enum(['active', 'archived', 'paused']).optional(),
-    parentId: z.string().optional(),
-  }).optional(),
-});
-
-export type ListProjectsInput = z.infer<typeof listProjectsInputSchema>;
+export interface ListProjectsInput {
+  filter?: ListProjectsFilter;
+}
 
 export interface ListProjectsOutput {
   projects: Project[];
 }
 
+/**
+ * List projects use case
+ * Requires: project:read permission
+ */
 export async function listProjectsUseCase(
   ctx: ExecutionContext,
   input: ListProjectsInput,
   adapter: StorageAdapter
 ): Promise<Result<ListProjectsOutput, DomainError>> {
-  // Authentication check (optional - can list projects anonymously)
-  // No authorization check needed for listing
-
-  const filter: { status?: string; parentId?: string | null } = {};
-
-  if (input.filter?.status !== undefined) {
-    filter.status = input.filter.status;
+  // Check authentication
+  if (!ctx.actorId) {
+    return err(createError('UNAUTHORIZED', 'Authentication required', false));
   }
 
-  if (input.filter?.parentId !== undefined) {
-    filter.parentId = input.filter.parentId;
+  // Check authorization
+  if (!ctx.permissions.includes(PERMISSIONS.PROJECT_READ)) {
+    return err(createError('FORBIDDEN', `Missing permission: ${PERMISSIONS.PROJECT_READ}`, false));
   }
+
+  const filter = input.filter ?? {};
 
   const result = await adapter.listProjects(filter);
   if (result.isErr()) {

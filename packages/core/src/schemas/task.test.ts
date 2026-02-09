@@ -1,14 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { taskSchema, taskStatusSchema } from './task.js';
+import { taskSchema, taskStatusSchema, prioritySchema } from './task.js';
 
 describe('Task Schema', () => {
   const validTask = {
     taskId: 'task-123',
-    status: 'pending' as const,
+    projectId: 'proj-123',
     title: 'Test Task',
+    type: 'feature',
+    ownerId: 'emp-456',
+    context: null,
+    goal: null,
+    deliverable: null,
+    status: 'backlog',
+    priority: 'P2',
+    dependencies: [],
+    blockedBy: [],
+    approval: null,
+    metadata: null,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
-    createdBy: 'user-123',
   };
 
   describe('valid task', () => {
@@ -18,25 +28,41 @@ describe('Task Schema', () => {
     });
 
     it('should accept all valid status values', () => {
-      const statuses = ['pending', 'running', 'completed', 'failed', 'cancelled'];
+      const statuses = ['backlog', 'todo', 'in_progress', 'blocked', 'in_review', 'done'];
       for (const status of statuses) {
         const result = taskStatusSchema.safeParse(status);
         expect(result.success).toBe(true);
       }
     });
 
-    it('should accept valid description', () => {
+    it('should accept all valid priority values', () => {
+      const priorities = ['P0', 'P1', 'P2', 'P3'];
+      for (const priority of priorities) {
+        const result = prioritySchema.safeParse(priority);
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should accept valid context', () => {
       const result = taskSchema.safeParse({
         ...validTask,
-        description: 'Task description with markdown **bold**',
+        context: 'Task context with details',
       });
       expect(result.success).toBe(true);
     });
 
-    it('should accept null description', () => {
+    it('should accept valid goal', () => {
       const result = taskSchema.safeParse({
         ...validTask,
-        description: null,
+        goal: 'Task goal description',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid deliverable', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        deliverable: 'Expected deliverable',
       });
       expect(result.success).toBe(true);
     });
@@ -49,10 +75,25 @@ describe('Task Schema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should accept null metadata', () => {
+    it('should accept task with dependencies', () => {
       const result = taskSchema.safeParse({
         ...validTask,
-        metadata: null,
+        dependencies: ['task-1', 'task-2'],
+        blockedBy: ['task-1'],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept task with approval', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        status: 'done',
+        approval: {
+          state: 'approved',
+          approverId: 'emp-123',
+          approvedAt: '2024-01-02T00:00:00.000Z',
+          policy: 'manual-review',
+        },
       });
       expect(result.success).toBe(true);
     });
@@ -120,10 +161,10 @@ describe('Task Schema', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject task without status', () => {
+    it('should reject task without projectId', () => {
       const result = taskSchema.safeParse({
         ...validTask,
-        status: undefined,
+        projectId: undefined,
       });
       expect(result.success).toBe(false);
     });
@@ -132,6 +173,54 @@ describe('Task Schema', () => {
       const result = taskSchema.safeParse({
         ...validTask,
         title: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without type', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        type: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without ownerId', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        ownerId: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without status', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        status: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without priority', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        priority: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without dependencies', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        dependencies: undefined,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject task without blockedBy', () => {
+      const result = taskSchema.safeParse({
+        ...validTask,
+        blockedBy: undefined,
       });
       expect(result.success).toBe(false);
     });
@@ -148,14 +237,6 @@ describe('Task Schema', () => {
       const result = taskSchema.safeParse({
         ...validTask,
         updatedAt: undefined,
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject task without createdBy', () => {
-      const result = taskSchema.safeParse({
-        ...validTask,
-        createdBy: undefined,
       });
       expect(result.success).toBe(false);
     });

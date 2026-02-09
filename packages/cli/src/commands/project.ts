@@ -1,104 +1,189 @@
 import { Command } from 'commander';
 import {
   createProjectUseCase,
-  getProjectUseCase,
   listProjectsUseCase,
+  getProjectUseCase,
+  updateProjectUseCase,
   archiveProjectUseCase,
-  type CreateProjectInput,
+  deleteProjectUseCase,
+  addProjectMemberUseCase,
+  removeProjectMemberUseCase,
+  type ExecutionContext,
 } from '@oct/core';
-import type { StorageAdapter } from '@oct/core';
-import { buildContext } from '../context/builder.js';
-import { formatOutput, formatError } from '../output/formatter.js';
+import type { FileSystemStorageAdapter } from '@oct/storage-fs';
 
-export function createProjectCommands(adapter: StorageAdapter) {
-  const projectCmd = new Command('project');
+export function createProjectCommands(
+  adapter: FileSystemStorageAdapter,
+  buildContext: () => ExecutionContext
+) {
+  const project = new Command('project');
+  project.description('Project management commands');
 
-  projectCmd
+  // Create project
+  project
     .command('create')
     .description('Create a new project')
     .requiredOption('--name <name>', 'Project name')
-    .option('--description <desc>', 'Project description')
-    .option('--parent <parentId>', 'Parent project ID (for sub-projects)')
-    .option('--json', 'Output as JSON')
+    .option('--description <desc>', 'Project description', '')
+    .option('--parent <id>', 'Parent project ID')
+    .option('--members <ids>', 'Comma-separated member worker IDs', '')
     .action(async (options) => {
-      const ctx = await buildContext();
-      const input: CreateProjectInput = {
+      const ctx = buildContext();
+      const result = await createProjectUseCase(ctx, {
         name: options.name,
         description: options.description,
         parentId: options.parent,
-        employeeIds: [],
-      };
-
-      const result = await createProjectUseCase(ctx, input, adapter);
+        memberIds: options.members ? options.members.split(',') : [],
+      }, adapter);
 
       if (result.isErr()) {
-        console.error(formatError(result.error, options.json));
+        console.error('Error:', result.error.message);
         process.exit(1);
       }
 
-      console.log(formatOutput(result.value, options.json));
+      console.log('Created project:', result.value.project.projectId);
     });
 
-  projectCmd
-    .command('get')
-    .description('Get a project by ID')
-    .requiredOption('--id <id>', 'Project ID')
-    .option('--json', 'Output as JSON')
+  // List projects
+  project
+    .command('list')
+    .description('List all projects')
+    .option('--status <status>', 'Filter by status (active or archived)')
+    .option('--parent <id>', 'Filter by parent project ID')
     .action(async (options) => {
-      const ctx = await buildContext();
+      const ctx = buildContext();
+      const result = await listProjectsUseCase(ctx, {
+        filter: {
+          status: options.status,
+          parentId: options.parent,
+        },
+      }, adapter);
+
+      if (result.isErr()) {
+        console.error('Error:', result.error.message);
+        process.exit(1);
+      }
+
+      for (const p of result.value.projects) {
+        console.log(`${p.projectId} | ${p.name} | ${p.status} | members: ${p.memberIds.length}`);
+      }
+    });
+
+  // Get project
+  project
+    .command('get')
+    .description('Get project by ID')
+    .requiredOption('--id <id>', 'Project ID')
+    .action(async (options) => {
+      const ctx = buildContext();
       const result = await getProjectUseCase(ctx, { projectId: options.id }, adapter);
 
       if (result.isErr()) {
-        console.error(formatError(result.error, options.json));
+        console.error('Error:', result.error.message);
         process.exit(1);
       }
 
-      console.log(formatOutput(result.value, options.json));
+      console.log(JSON.stringify(result.value.project, null, 2));
     });
 
-  projectCmd
-    .command('list')
-    .description('List all projects')
-    .option('--parent <parentId>', 'Filter by parent project')
-    .option('--status <status>', 'Filter by status (active, archived, paused)')
-    .option('--json', 'Output as JSON')
+  // Update project
+  project
+    .command('update')
+    .description('Update project')
+    .requiredOption('--id <id>', 'Project ID')
+    .option('--name <name>', 'New name')
+    .option('--description <desc>', 'New description')
     .action(async (options) => {
-      const ctx = await buildContext();
-      const result = await listProjectsUseCase(
-        ctx,
-        {
-          filter: {
-            parentId: options.parent,
-            status: options.status,
-          },
-        },
-        adapter
-      );
+      const ctx = buildContext();
+      const result = await updateProjectUseCase(ctx, {
+        projectId: options.id,
+        name: options.name,
+        description: options.description,
+      }, adapter);
 
       if (result.isErr()) {
-        console.error(formatError(result.error, options.json));
+        console.error('Error:', result.error.message);
         process.exit(1);
       }
 
-      console.log(formatOutput(result.value, options.json));
+      console.log('Updated project:', result.value.project.projectId);
     });
 
-  projectCmd
+  // Archive project
+  project
     .command('archive')
-    .description('Archive a project')
+    .description('Archive project')
     .requiredOption('--id <id>', 'Project ID')
-    .option('--json', 'Output as JSON')
     .action(async (options) => {
-      const ctx = await buildContext();
+      const ctx = buildContext();
       const result = await archiveProjectUseCase(ctx, { projectId: options.id }, adapter);
 
       if (result.isErr()) {
-        console.error(formatError(result.error, options.json));
+        console.error('Error:', result.error.message);
         process.exit(1);
       }
 
-      console.log(formatOutput(result.value, options.json));
+      console.log('Archived project:', result.value.project.projectId);
     });
 
-  return projectCmd;
+  // Delete project
+  project
+    .command('delete')
+    .description('Delete project')
+    .requiredOption('--id <id>', 'Project ID')
+    .action(async (options) => {
+      const ctx = buildContext();
+      const result = await deleteProjectUseCase(ctx, { projectId: options.id }, adapter);
+
+      if (result.isErr()) {
+        console.error('Error:', result.error.message);
+        process.exit(1);
+      }
+
+      console.log('Deleted project:', options.id);
+    });
+
+  // Add member
+  project
+    .command('add-member')
+    .description('Add member to project')
+    .requiredOption('--id <id>', 'Project ID')
+    .requiredOption('--worker <workerId>', 'Worker ID to add')
+    .action(async (options) => {
+      const ctx = buildContext();
+      const result = await addProjectMemberUseCase(ctx, {
+        projectId: options.id,
+        workerId: options.worker,
+      }, adapter);
+
+      if (result.isErr()) {
+        console.error('Error:', result.error.message);
+        process.exit(1);
+      }
+
+      console.log('Added member to project:', options.id);
+    });
+
+  // Remove member
+  project
+    .command('remove-member')
+    .description('Remove member from project')
+    .requiredOption('--id <id>', 'Project ID')
+    .requiredOption('--worker <workerId>', 'Worker ID to remove')
+    .action(async (options) => {
+      const ctx = buildContext();
+      const result = await removeProjectMemberUseCase(ctx, {
+        projectId: options.id,
+        workerId: options.worker,
+      }, adapter);
+
+      if (result.isErr()) {
+        console.error('Error:', result.error.message);
+        process.exit(1);
+      }
+
+      console.log('Removed member from project:', options.id);
+    });
+
+  return project;
 }

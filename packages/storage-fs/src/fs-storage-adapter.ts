@@ -4,10 +4,11 @@ import { ok, err, type Result } from 'neverthrow';
 import type {
   StorageAdapter,
   Project,
-  Employee,
-  EmployeeTemplate,
+  Worker,
   Task,
   DomainError,
+  ProjectFilter,
+  TaskFilter,
 } from '@oct/core';
 import { createError } from '@oct/core';
 
@@ -17,29 +18,43 @@ export interface FileSystemStorageConfig {
 
 export class FileSystemStorageAdapter implements StorageAdapter {
   private dbRoot: string;
+  private workersDir: string;
   private projectsDir: string;
-  private employeesDir: string;
-  private templatesDir: string;
   private tasksDir: string;
 
   constructor(config: FileSystemStorageConfig) {
     this.dbRoot = config.dbRoot;
+    this.workersDir = path.join(this.dbRoot, 'workers');
     this.projectsDir = path.join(this.dbRoot, 'projects');
-    this.employeesDir = path.join(this.dbRoot, 'employees');
-    this.templatesDir = path.join(this.dbRoot, 'templates');
     this.tasksDir = path.join(this.dbRoot, 'tasks');
   }
 
   async initialize(): Promise<Result<void, DomainError>> {
     try {
+      await fs.mkdir(this.workersDir, { recursive: true });
       await fs.mkdir(this.projectsDir, { recursive: true });
-      await fs.mkdir(this.employeesDir, { recursive: true });
-      await fs.mkdir(this.templatesDir, { recursive: true });
       await fs.mkdir(this.tasksDir, { recursive: true });
       return ok(undefined);
     } catch (error) {
       return err(createError('INTERNAL_ERROR', `Failed to initialize storage: ${error}`, false));
     }
+  }
+
+  // Workers
+  async getWorker(id: string): Promise<Result<Worker | null, DomainError>> {
+    return this.readEntity<Worker>(this.workersDir, id);
+  }
+
+  async saveWorker(worker: Worker): Promise<Result<void, DomainError>> {
+    return this.writeEntity(this.workersDir, worker.workerId, worker);
+  }
+
+  async deleteWorker(id: string): Promise<Result<void, DomainError>> {
+    return this.deleteEntity(this.workersDir, id);
+  }
+
+  async listWorkers(): Promise<Result<Worker[], DomainError>> {
+    return this.listEntities<Worker>(this.workersDir);
   }
 
   // Projects
@@ -55,7 +70,7 @@ export class FileSystemStorageAdapter implements StorageAdapter {
     return this.deleteEntity(this.projectsDir, id);
   }
 
-  async listProjects(filter?: { parentId?: string | null; status?: string }): Promise<Result<Project[], DomainError>> {
+  async listProjects(filter?: ProjectFilter): Promise<Result<Project[], DomainError>> {
     const result = await this.listEntities<Project>(this.projectsDir);
     if (result.isErr()) return err(result.error);
 
@@ -72,51 +87,8 @@ export class FileSystemStorageAdapter implements StorageAdapter {
     return ok(projects);
   }
 
-  // Employees
-  async getEmployee(id: string): Promise<Result<Employee | null, DomainError>> {
-    return this.readEntity<Employee>(this.employeesDir, id);
-  }
-
-  async saveEmployee(employee: Employee): Promise<Result<void, DomainError>> {
-    return this.writeEntity(this.employeesDir, employee.employeeId, employee);
-  }
-
-  async deleteEmployee(id: string): Promise<Result<void, DomainError>> {
-    return this.deleteEntity(this.employeesDir, id);
-  }
-
-  async listEmployees(filter?: { kind?: string; templateId?: string }): Promise<Result<Employee[], DomainError>> {
-    const result = await this.listEntities<Employee>(this.employeesDir);
-    if (result.isErr()) return err(result.error);
-
-    let employees = result.value;
-
-    if (filter?.kind !== undefined) {
-      employees = employees.filter(e => e.kind === filter.kind);
-    }
-
-    if (filter?.templateId !== undefined) {
-      employees = employees.filter(e => e.templateId === filter.templateId);
-    }
-
-    return ok(employees);
-  }
-
-  // Templates
-  async getTemplate(id: string): Promise<Result<EmployeeTemplate | null, DomainError>> {
-    return this.readEntity<EmployeeTemplate>(this.templatesDir, id);
-  }
-
-  async saveTemplate(template: EmployeeTemplate): Promise<Result<void, DomainError>> {
-    return this.writeEntity(this.templatesDir, template.templateId, template);
-  }
-
-  async deleteTemplate(id: string): Promise<Result<void, DomainError>> {
-    return this.deleteEntity(this.templatesDir, id);
-  }
-
-  async listTemplates(): Promise<Result<EmployeeTemplate[], DomainError>> {
-    return this.listEntities<EmployeeTemplate>(this.templatesDir);
+  async getSubProjects(parentId: string): Promise<Result<Project[], DomainError>> {
+    return this.listProjects({ parentId });
   }
 
   // Tasks
@@ -132,7 +104,7 @@ export class FileSystemStorageAdapter implements StorageAdapter {
     return this.deleteEntity(this.tasksDir, id);
   }
 
-  async listTasks(filter?: { projectId?: string; ownerId?: string; status?: string; priority?: string }): Promise<Result<Task[], DomainError>> {
+  async listTasks(filter?: TaskFilter): Promise<Result<Task[], DomainError>> {
     const result = await this.listEntities<Task>(this.tasksDir);
     if (result.isErr()) return err(result.error);
 
@@ -157,24 +129,32 @@ export class FileSystemStorageAdapter implements StorageAdapter {
     return ok(tasks);
   }
 
-  // Queries
+  // Optimized queries
   async getTasksByProject(projectId: string): Promise<Result<Task[], DomainError>> {
     return this.listTasks({ projectId });
   }
 
-  async getSubProjects(parentId: string): Promise<Result<Project[], DomainError>> {
-    return this.listProjects({ parentId });
+  async getTasksByOwner(workerId: string): Promise<Result<Task[], DomainError>> {
+    return this.listTasks({ ownerId: workerId });
   }
 
-  async getTasksByOwner(employeeId: string): Promise<Result<Task[], DomainError>> {
-    return this.listTasks({ ownerId: employeeId });
-  }
+  // Batch operations
+  async getTasksByIds(ids: string[]): Promise<Result<Map<string, Task>, DomainError>> {
+    const tasks = new Map<string, Task>();
 
-  async getTasksByDependency(taskId: string): Promise<Result<Task[], DomainError>> {
-    const result = await this.listEntities<Task>(this.tasksDir);
-    if (result.isErr()) return err(result.error);
+    const results = await Promise.all(
+      ids.map(async (id) => {
+        const result = await this.getTask(id);
+        return { id, result };
+      })
+    );
 
-    const tasks = result.value.filter(t => t.dependencies.includes(taskId));
+    for (const { id, result } of results) {
+      if (result.isOk() && result.value) {
+        tasks.set(id, result.value);
+      }
+    }
+
     return ok(tasks);
   }
 

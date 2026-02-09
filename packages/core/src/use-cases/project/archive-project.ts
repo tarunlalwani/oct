@@ -1,45 +1,54 @@
 import { ok, err, type Result } from 'neverthrow';
-import type { ExecutionContext } from '../../schemas/context.js';
-import type { Project } from '../../schemas/project.js';
-import type { DomainError } from '../../schemas/error.js';
-import { createError } from '../../schemas/error.js';
 import type { StorageAdapter } from '../../ports/storage-adapter.js';
-
-export interface ArchiveProjectInput {
-  projectId: string;
-}
+import type {
+  ExecutionContext,
+  Project,
+  ArchiveProjectInput,
+  DomainError,
+} from '../../schemas/index.js';
+import { createError, PERMISSIONS } from '../../schemas/index.js';
 
 export interface ArchiveProjectOutput {
   project: Project;
 }
 
+/**
+ * Archive project use case
+ * Requires: project:update permission
+ * Archives project and all sub-projects recursively
+ * Project must have no incomplete tasks
+ */
 export async function archiveProjectUseCase(
   ctx: ExecutionContext,
   input: ArchiveProjectInput,
   adapter: StorageAdapter
 ): Promise<Result<ArchiveProjectOutput, DomainError>> {
-  // Authentication check
-  if (ctx.actorId === null) {
+  // Check authentication
+  if (!ctx.actorId) {
     return err(createError('UNAUTHORIZED', 'Authentication required', false));
   }
 
-  // Authorization check
-  if (!ctx.permissions.includes('project:archive')) {
-    return err(createError('FORBIDDEN', 'Missing permission: project:archive', false));
+  // Check authorization (using update permission for archive)
+  if (!ctx.permissions.includes(PERMISSIONS.PROJECT_UPDATE)) {
+    return err(createError('FORBIDDEN', `Missing permission: ${PERMISSIONS.PROJECT_UPDATE}`, false));
   }
 
   // Get existing project
   const projectResult = await adapter.getProject(input.projectId);
-  if (projectResult.isErr()) return err(projectResult.error);
-  if (!projectResult.value) {
-    return err(createError('NOT_FOUND', `Project not found: ${input.projectId}`, false));
+  if (projectResult.isErr()) {
+    return err(projectResult.error);
   }
 
   const project = projectResult.value;
+  if (!project) {
+    return err(createError('NOT_FOUND', `Project not found: ${input.projectId}`, false));
+  }
 
   // Check for incomplete tasks
   const tasksResult = await adapter.getTasksByProject(input.projectId);
-  if (tasksResult.isErr()) return err(tasksResult.error);
+  if (tasksResult.isErr()) {
+    return err(tasksResult.error);
+  }
 
   const incompleteTasks = tasksResult.value.filter(t => t.status !== 'done');
   if (incompleteTasks.length > 0) {
@@ -50,7 +59,9 @@ export async function archiveProjectUseCase(
 
   // Archive sub-projects recursively
   const subProjectsResult = await adapter.getSubProjects(input.projectId);
-  if (subProjectsResult.isErr()) return err(subProjectsResult.error);
+  if (subProjectsResult.isErr()) {
+    return err(subProjectsResult.error);
+  }
 
   for (const subProject of subProjectsResult.value) {
     if (subProject.status !== 'archived') {
@@ -59,7 +70,9 @@ export async function archiveProjectUseCase(
         status: 'archived',
         updatedAt: now,
       });
-      if (archiveResult.isErr()) return err(archiveResult.error);
+      if (archiveResult.isErr()) {
+        return err(archiveResult.error);
+      }
     }
   }
 
