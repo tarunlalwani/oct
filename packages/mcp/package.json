@@ -1,6 +1,7 @@
 {
-  "name": "@oct/server",
+  "name": "@oct/mcp",
   "version": "0.1.0",
+  "description": "OCT MCP Server - Model Context Protocol interface for OCT",
   "type": "module",
   "exports": {
     ".": {
@@ -8,28 +9,26 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "bin": {
+    "oct-mcp": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "dev": "tsx src/index.ts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@oct/core": "workspace:*",
-    "@oct/infra": "workspace:*",
     "@oct/storage-fs": "workspace:*",
-    "fastify": "^4.25.0",
     "neverthrow": "^6.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "@vitest/coverage-v8": "^1.6.1",
     "tsup": "^8.0.1",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"
   }

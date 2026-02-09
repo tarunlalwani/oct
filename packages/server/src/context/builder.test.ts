@@ -27,11 +27,11 @@ describe('Server Context Builder', () => {
       expect(ctx.traceId).toBe('req-abc');
     });
 
-    it('should use "anonymous" as default actorId', () => {
+    it('should use null as default actorId', () => {
       const request = createMockRequest();
       const ctx = buildExecutionContextFromRequest(request);
 
-      expect(ctx.actorId).toBe('anonymous');
+      expect(ctx.actorId).toBeNull();
     });
 
     it('should use "default" as default workspaceId', () => {
@@ -41,15 +41,11 @@ describe('Server Context Builder', () => {
       expect(ctx.workspaceId).toBe('default');
     });
 
-    it('should include default permissions', () => {
+    it('should have empty permissions by default', () => {
       const request = createMockRequest();
       const ctx = buildExecutionContextFromRequest(request);
 
-      expect(ctx.permissions).toContain('task:create');
-      expect(ctx.permissions).toContain('task:read');
-      expect(ctx.permissions).toContain('task:run');
-      expect(ctx.permissions).toContain('task:update');
-      expect(ctx.permissions).toContain('task:delete');
+      expect(ctx.permissions).toEqual([]);
     });
 
     it('should include request metadata', () => {
@@ -97,6 +93,15 @@ describe('Server Context Builder', () => {
     it('should trim whitespace from permissions', () => {
       const request = createMockRequest({
         headers: { 'x-permissions': 'task:read , task:delete' },
+      });
+      const ctx = buildExecutionContextFromRequest(request);
+
+      expect(ctx.permissions).toEqual(['task:read', 'task:delete']);
+    });
+
+    it('should filter out empty permissions', () => {
+      const request = createMockRequest({
+        headers: { 'x-permissions': 'task:read,,task:delete,' },
       });
       const ctx = buildExecutionContextFromRequest(request);
 

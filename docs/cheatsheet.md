@@ -137,6 +137,146 @@ oct task list --remote --json
 oct task get --id <taskId> --remote
 ```
 
+## REST API Quick Reference
+
+### Authentication Headers
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Actor-ID` | Acting user/agent ID | `worker-123` |
+| `X-Workspace-ID` | Workspace identifier | `default` |
+| `X-Permissions` | Comma-separated permissions | `task:create,task:read` |
+
+### Common Endpoints
+
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Create worker
+curl -X POST http://localhost:3000/v1/workers \
+  -H "Content-Type: application/json" \
+  -H "X-Actor-ID: system" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: worker:create" \
+  -d '{"name": "Alice", "type": "human", "permissions": ["task:create"]}'
+
+# Create project
+curl -X POST http://localhost:3000/v1/projects \
+  -H "Content-Type: application/json" \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: project:create" \
+  -d '{"name": "My Project", "description": "Project details"}'
+
+# Create task
+curl -X POST http://localhost:3000/v1/tasks \
+  -H "Content-Type: application/json" \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: task:create" \
+  -d '{"projectId": "proj-...", "title": "New task", "ownerId": "worker-123"}'
+
+# List tasks with filter
+curl "http://localhost:3000/v1/tasks?status=ready&ownerId=worker-123" \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: task:read"
+
+# Start task
+curl -X POST http://localhost:3000/v1/tasks/task-.../start \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: task:start"
+
+# Complete task
+curl -X POST http://localhost:3000/v1/tasks/task-.../complete \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: task:complete"
+
+# Get project stats
+curl http://localhost:3000/v1/projects/proj-.../stats \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: project:read"
+```
+
+### REST API Response Format
+
+```json
+// Success
+{
+  "ok": true,
+  "data": { ... }
+}
+
+// Error
+{
+  "ok": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Task not found",
+    "retryable": false
+  }
+}
+```
+
+## MCP Server Quick Reference
+
+### Configuration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "oct": {
+      "command": "node",
+      "args": ["/path/to/oct/packages/mcp/dist/index.js"],
+      "env": {
+        "OCT_STORAGE_PATH": "~/.oct/db"
+      }
+    }
+  }
+}
+```
+
+### MCP Tool Examples
+
+```
+# Worker management
+Create a new worker named "Alice" who is a human developer
+List all workers in the system
+Get details for worker worker-018f...
+
+# Project management
+Create a project "Website Redesign" with Alice and Bob as members
+List all active projects
+Archive project proj-018f...
+
+# Task management
+Create a task "Implement login" in project proj-... and assign to Alice
+List all ready tasks assigned to worker-123
+Start task task-018f...
+Complete task task-018f...
+Reassign task task-018f... to worker-456
+
+# Summary and stats
+What tasks are ready for Bob to work on?
+Show me all blocked tasks and what's blocking them
+Get statistics for project proj-018f...
+What's the current workload for Alice?
+```
+
+### MCP Permissions
+
+| Permission | Description |
+|------------|-------------|
+| `worker:create`, `worker:read`, `worker:update`, `worker:delete` | Worker management |
+| `project:create`, `project:read`, `project:update`, `project:delete`, `project:manage-members` | Project management |
+| `task:create`, `task:read`, `task:update`, `task:delete`, `task:start`, `task:complete`, `task:reopen`, `task:assign` | Task management |
+
 ## Error Handling in Scripts
 
 ```bash

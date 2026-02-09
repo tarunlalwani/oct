@@ -26,7 +26,7 @@ oct task create --title "My Task"
 - **AI-agent compatible** - JSON mode output, no interactive prompts
 - **Type-safe** - Result types with neverthrow for error handling
 - **UUIDv7 IDs** - Time-sortable identifiers for better performance
-- **Dual interface** - Use via CLI or REST API
+- **Triple interface** - Use via CLI, REST API, or MCP server
 
 ## Installation
 
@@ -66,6 +66,76 @@ oct task run --id <task-id>
 # Use remote API instead of local core
 oct task create --title "Remote task" --remote
 ```
+
+## REST API
+
+OCT includes a full REST API server for remote access and integrations.
+
+**Start the server:**
+
+```bash
+# Start the REST API server
+pnpm --filter @oct/server start
+
+# Server runs on http://localhost:3000 by default
+```
+
+**Authentication:**
+
+The REST API uses header-based authentication:
+
+```bash
+curl -X POST http://localhost:3000/v1/tasks \
+  -H "Content-Type: application/json" \
+  -H "X-Actor-ID: worker-123" \
+  -H "X-Workspace-ID: default" \
+  -H "X-Permissions: task:create,task:read" \
+  -d '{"projectId": "proj-...", "title": "New task", "ownerId": "worker-123"}'
+```
+
+**Key endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/v1/workers` | GET/POST | List/create workers |
+| `/v1/projects` | GET/POST | List/create projects |
+| `/v1/tasks` | GET/POST | List/create tasks |
+| `/v1/tasks/:id/start` | POST | Start a task |
+| `/v1/tasks/:id/complete` | POST | Complete a task |
+
+See [docs/api/rest-api.md](docs/api/rest-api.md) for complete API reference.
+
+## MCP Server
+
+OCT provides an MCP (Model Context Protocol) server for AI assistant integration.
+
+**Configure with Claude Code:**
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "oct": {
+      "command": "node",
+      "args": ["/path/to/oct/packages/mcp/dist/index.js"],
+      "env": {
+        "OCT_STORAGE_PATH": "~/.oct/db"
+      }
+    }
+  }
+}
+```
+
+**Available tools:**
+
+- `worker_create`, `worker_list`, `worker_get` - Manage workers
+- `project_create`, `project_list`, `project_get` - Manage projects
+- `task_create`, `task_list`, `task_get`, `task_start`, `task_complete` - Manage tasks
+- `summary_project_stats`, `summary_worker_workload` - Get statistics
+
+See [docs/api/mcp-server.md](docs/api/mcp-server.md) for complete tool reference.
 
 ## Architecture
 

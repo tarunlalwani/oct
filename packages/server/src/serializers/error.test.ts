@@ -35,7 +35,7 @@ describe('Error Serializers', () => {
     });
 
     it('should return 500 for unknown error codes', () => {
-      const error = { code: 'UNKNOWN', message: 'Unknown', retryable: false } as DomainError;
+      const error = { code: 'UNKNOWN', message: 'Unknown', retryable: false } as unknown as DomainError;
       expect(errorToHttpStatus(error)).toBe(500);
     });
   });
@@ -68,7 +68,7 @@ describe('Error Serializers', () => {
         details: { field: 'title' },
       };
 
-      const result = serializeError(error);
+      const result = serializeError(error) as { ok: boolean; error: { details: Record<string, unknown> } };
 
       expect(result.error.details).toEqual({ field: 'title' });
     });

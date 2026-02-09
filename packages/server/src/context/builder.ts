@@ -1,24 +1,21 @@
 import type { FastifyRequest } from 'fastify';
 import type { ExecutionContext } from '@oct/core';
 
+/**
+ * Build ExecutionContext from request headers
+ * - X-Actor-Id → ctx.actorId
+ * - X-Permissions → ctx.permissions (comma-separated)
+ * - X-Workspace-Id → ctx.workspaceId (default: 'default')
+ */
 export function buildExecutionContextFromRequest(request: FastifyRequest): ExecutionContext {
-  // In a real implementation, this would extract auth info from headers
-  // and validate tokens. For now, we use sensible defaults or headers.
-
   const actorId = request.headers['x-actor-id'] as string | undefined;
   const workspaceId = request.headers['x-workspace-id'] as string | undefined;
   const permissionsHeader = request.headers['x-permissions'] as string | undefined;
 
   return {
-    actorId: actorId ?? 'anonymous',
+    actorId: actorId ?? null,
     workspaceId: workspaceId ?? 'default',
-    permissions: permissionsHeader?.split(',').map(p => p.trim()) ?? [
-      'task:create',
-      'task:read',
-      'task:run',
-      'task:update',
-      'task:delete',
-    ],
+    permissions: permissionsHeader?.split(',').map(p => p.trim()).filter(Boolean) ?? [],
     environment: 'server',
     traceId: request.id as string,
     metadata: {
