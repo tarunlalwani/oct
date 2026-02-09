@@ -132,7 +132,7 @@ export class FileSystemStorageAdapter implements StorageAdapter {
     return this.deleteEntity(this.tasksDir, id);
   }
 
-  async listTasks(filter?: { projectId?: string; ownerId?: string; status?: string }): Promise<Result<Task[], DomainError>> {
+  async listTasks(filter?: { projectId?: string; ownerId?: string; status?: string; priority?: string }): Promise<Result<Task[], DomainError>> {
     const result = await this.listEntities<Task>(this.tasksDir);
     if (result.isErr()) return err(result.error);
 
@@ -148,6 +148,10 @@ export class FileSystemStorageAdapter implements StorageAdapter {
 
     if (filter?.status !== undefined) {
       tasks = tasks.filter(t => t.status === filter.status);
+    }
+
+    if (filter?.priority !== undefined) {
+      tasks = tasks.filter(t => t.priority === filter.priority);
     }
 
     return ok(tasks);

@@ -74,13 +74,16 @@ async function unblockDependentTasks(completedTaskId: string, adapter: StorageAd
 
   for (const dependent of dependentsResult.value) {
     if (dependent.status === 'blocked') {
-      const remainingBlockers = dependent.dependencies.filter(async (depId) => {
-        const depResult = await adapter.getTask(depId);
-        return depResult.isOk() && depResult.value && depResult.value.status !== 'done';
-      });
+      // Check ALL dependencies properly using Promise.all
+      const depStatuses = await Promise.all(
+        dependent.dependencies.map(async (depId) => {
+          const depResult = await adapter.getTask(depId);
+          return depResult.isOk() && depResult.value?.status === 'done';
+        })
+      );
 
-      const blockers = await Promise.all(remainingBlockers);
-      if (blockers.length === 0) {
+      const allDone = depStatuses.every(status => status);
+      if (allDone) {
         const updatedDependent: Task = {
           ...dependent,
           status: 'todo',

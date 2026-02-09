@@ -28,7 +28,7 @@ export interface StorageAdapter {
   getTask(id: string): Promise<Result<Task | null, DomainError>>;
   saveTask(task: Task): Promise<Result<void, DomainError>>;
   deleteTask(id: string): Promise<Result<void, DomainError>>;
-  listTasks(filter?: { projectId?: string; ownerId?: string; status?: string }): Promise<Result<Task[], DomainError>>;
+  listTasks(filter?: { projectId?: string; ownerId?: string; status?: string; priority?: string }): Promise<Result<Task[], DomainError>>;
 
   // Queries
   getTasksByProject(projectId: string): Promise<Result<Task[], DomainError>>;

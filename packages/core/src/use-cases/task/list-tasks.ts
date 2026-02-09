@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ok, type Result } from 'neverthrow';
+import { ok, err, type Result } from 'neverthrow';
 import type { ExecutionContext } from '../../schemas/context.js';
 import { taskSchema, type Task } from '../../schemas/task.js';
 import type { DomainError } from '../../schemas/error.js';
@@ -11,6 +11,7 @@ export const listTasksInputSchema = z.object({
     projectId: z.string().optional(),
     ownerId: z.string().optional(),
     status: z.enum(['backlog', 'todo', 'in_progress', 'blocked', 'in_review', 'done']).optional(),
+    priority: z.enum(['P0', 'P1', 'P2', 'P3']).optional(),
   }).optional(),
 });
 

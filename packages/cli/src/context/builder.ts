@@ -34,7 +34,12 @@ function getDefaultPermissions(): string[] {
     return perms.split(',').map(p => p.trim());
   }
   // Default full permissions for local CLI usage
-  return ['task:create', 'task:read', 'task:run', 'task:update', 'task:delete'];
+  return [
+    'task:create', 'task:read', 'task:run', 'task:update', 'task:delete',
+    'project:create', 'project:read', 'project:update', 'project:delete',
+    'employee:create', 'employee:read', 'employee:update', 'employee:delete',
+    'template:create', 'template:read', 'template:update', 'template:delete',
+  ];
 }
 
 function getDefaultEnvironment(): 'local' | 'ci' | 'server' {
